@@ -1,0 +1,399 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh-integration",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        80,
+        -48
+      ],
+      "id": "569aa145-7465-4e8f-b834-d19bfaa7ef3a",
+      "name": "Webhook",
+      "webhookId": "52f2586b-5b58-429b-a254-37067fb4d972"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You will receive a Wazuh alert in JSON format. \nAnalyze it and determine:\n1. What type of threat it represents.\n2. The severity of the threat.\n3. Provide detailed reasoning using any enrichment from AbuseIPDB and VirusTotal if necessary.\n4. Suggest recommended actions.\n5. Assign a confidence score (0-100).\n\n{{ $json.body.toJsonString() }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an autonomous SOC analyst AI. \nYour job is to analyze security alerts coming from Wazuh. \nYou have access to the following tools:\n\n1. get_abuseipdb_score(ip): Queries AbuseIPDB for an IP address. Returns abuse confidence score, total reports, categories, and last reported timestamp.\n\n2. get_virustotal_report(ip): Queries VirusTotal for an IP address. Returns malicious/suspicious detections, categories, and last analysis date.\n\nWhenever the alert contains a source IP or indicates an attack, you MUST call the tools:\n1. get_abuseipdb_score(ip) using the source IP.\n2. get_virustotal_report(ip) using the source IP.\n\nUse the returned data from these tools to enrich your reasoning.\nDo NOT skip calling the tools under these conditions.\n\n\nAlways analyze the alert JSON input carefully. \nIf the alert contains an attack or a source IP, you must ALWAYS use the enrichment tools (AbuseIPDB and VirusTotal) to gather additional threat intelligence before forming your conclusion. \n\nDo not perform any actions on the agent system. Only analyze, classify, and recommend responses.\n\nYour JSON output must have the following fields:\n{\n  \"threat_type\": \"<string describing the type of threat>\",\n  \"severity\": \"<Low|Medium|High|Critical>\",\n  \"reasoning\": \"<detailed reasoning for your classification, include results from enrichment tools>\",\n  \"recommended_action\": \"<what should be done next>\",\n  \"confidence_score\": \"<0-100>\"\n}\nAlways include detailed reasoning and confidence_score.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        -32
+      ],
+      "id": "7db03d9c-5b28-496d-a00f-17add3950512",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use this tool to check the reputation of an IP address using AbuseIPDB. It returns the abuse confidence score, total reports, categories of abuse, and the last reported timestamp. This helps identify whether an IP is malicious or safe. Provide the IP address as input, and the tool will return structured threat intelligence data.",
+        "url": "https://api.abuseipdb.com/api/v2/check",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "maxAgeInDays",
+              "value": "90"
+            },
+            {
+              "name": "ipAddress",
+              "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('parameters1_Value', ``, 'string') }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Key",
+              "value": "0bf65f417a48d4861d90a6f9a1b0285cfb359ce983d8a682815f7cabdce073c708138977d5056e42"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        832,
+        224
+      ],
+      "id": "6a8137f4-1f30-491d-b13b-5c142011615f",
+      "name": "get_abuseipdb_score"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use this tool to retrieve the reputation and threat intelligence of an IP address from VirusTotal. It returns data such as malicious or suspicious detections, categories, and the last analysis date from multiple security vendors. Provide an IP address as input, and the tool will return structured threat intelligence to help assess the risk level of the IP.\n\nThe tool must query the following URL format:\nhttps://www.virustotal.com/api/v3/ip_addresses/{ip}\nReplace {ip} with the target IP address.",
+        "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('URL', ``, 'string') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Apikey",
+              "value": "9d611f6e28a5c5f2b1335754f479ba390ad4aa805928b6215d2671094eab696e"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        736,
+        240
+      ],
+      "id": "d0ede2a4-d461-430d-aad0-3fa40f65ba64",
+      "name": "get_virustotal_report"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-pro",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        624,
+        208
+      ],
+      "id": "c3e242c7-69b6-4c2e-857c-4cdbf6fc1969",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "TWyOonR9wzsqOnxM",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"threat_type\": \"<string describing the type of threat>\",\n  \"severity\": \"<Low|Medium|High|Critical>\",\n  \"reasoning\": \"<detailed reasoning for your classification>\",\n  \"recommended_action\": \"<what should be done next>\",\n  \"confidence_score\": \"<0-100>\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        976,
+        240
+      ],
+      "id": "dc73af7e-c1b6-4171-a671-9b54c56ee383",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "create",
+        "projectId": "n8n-workflow-675fd",
+        "collection": "={{ $('Webhook').item.json.body.summary.agent }}",
+        "documentId": "={{ $('Webhook').item.json.body.raw_alert.timestamp }}",
+        "columns": "=alert"
+      },
+      "type": "n8n-nodes-base.googleFirebaseCloudFirestore",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        528
+      ],
+      "id": "26750365-0015-4862-8872-6f0faf4e78c2",
+      "name": "Create a document",
+      "credentials": {
+        "googleApi": {
+          "id": "ITqJVLnOlGDkz6Qx",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "42383c3a-2b4b-4d8d-b592-edc44702d727",
+              "name": "alert",
+              "value": "={{ JSON.stringify($json.body) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        176,
+        544
+      ],
+      "id": "1ab62d1a-d983-4bad-980d-1f230644aada",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "chatId": "5574756329",
+        "text": "={{ $json.output.threat_type }}{{ $json.output.severity }}{{ $json.output.reasoning }}{{ $json.output.recommended_action }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        976,
+        16
+      ],
+      "id": "9211a960-e33e-46ab-88b6-e2091b9d0e45",
+      "name": "Send a text message",
+      "webhookId": "f760385f-9ac6-42f1-9e94-09a8ef816119",
+      "alwaysOutputData": false,
+      "executeOnce": false,
+      "retryOnFail": false,
+      "credentials": {
+        "telegramApi": {
+          "id": "RMOeZflQJw8AYo5q",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.potatopc.lol",
+            "user-agent": "python-requests/2.32.2",
+            "content-length": "1019",
+            "accept": "*/*",
+            "accept-encoding": "gzip",
+            "cdn-loop": "cloudflare; loops=1",
+            "cf-connecting-ip": "45.119.28.35",
+            "cf-ipcountry": "IN",
+            "cf-ray": "98d4c1ad3acd2c83-FRA",
+            "cf-visitor": "{\"scheme\":\"http\"}",
+            "cf-warp-tag-id": "36642931-bb0b-49dd-889c-2ec3eff0330c",
+            "connection": "keep-alive",
+            "content-type": "application/json",
+            "x-forwarded-for": "45.119.28.35",
+            "x-forwarded-proto": "http"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "summary": {
+              "rule_id": "5758",
+              "description": "Maximum authentication attempts exceeded.",
+              "agent": "pranav-kali",
+              "level": 8
+            },
+            "raw_alert": {
+              "timestamp": "2025-10-12T07:05:33.317+0000",
+              "rule": {
+                "level": 8,
+                "description": "Maximum authentication attempts exceeded.",
+                "id": "5758",
+                "mitre": {
+                  "id": [
+                    "T1110"
+                  ],
+                  "tactic": [
+                    "Credential Access"
+                  ],
+                  "technique": [
+                    "Brute Force"
+                  ]
+                },
+                "firedtimes": 15,
+                "mail": false,
+                "groups": [
+                  "syslog",
+                  "sshd",
+                  "authentication_failed"
+                ],
+                "gpg13": [
+                  "7.1"
+                ]
+              },
+              "agent": {
+                "id": "004",
+                "name": "pranav-kali",
+                "ip": "192.168.1.11"
+              },
+              "manager": {
+                "name": "wazuh.manager"
+              },
+              "id": "1760252733.254903",
+              "full_log": "Oct 12 07:05:33 kali sshd-session[247388]: error: maximum authentication attempts exceeded for kali from 192.168.1.45 port 50181 ssh2 [preauth]",
+              "predecoder": {
+                "program_name": "sshd-session",
+                "timestamp": "Oct 12 07:05:33",
+                "hostname": "kali"
+              },
+              "decoder": {
+                "parent": "sshd",
+                "name": "sshd"
+              },
+              "data": {
+                "srcip": "192.168.1.45",
+                "srcport": "50181",
+                "dstuser": "kali"
+              },
+              "location": "journald"
+            }
+          },
+          "webhookUrl": "http://n8n.potatopc.lol/webhook/wazuh-integration",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_abuseipdb_score": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_virustotal_report": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a document": {
+      "main": [
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Create a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e86abc70-4610-4ed3-a38b-c260fa255e42",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4381e5b05c3249e2bcbd9ea78e1dfdf137c0063ef4e318a3b5f72a2d0a06c398"
+  },
+  "id": "10vGc82KVFYs37Eo",
+  "tags": []
+}
